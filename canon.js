@@ -68,7 +68,7 @@ export const GHOST_EIGHTEEN = [
   { header: "x-gsc-duns", value: "24-336-6774" },
   { header: "x-gsc-inbound", value: "https://x-gsi.ai/ingest" },
   { header: "x-gsc-trust-anchor", value: "dpuone.ai" },
-  { header: "x-gsc-registry", value: "io.github.gsc-em/mcp-cpg-gtin" },
+  { header: "x-gsc-registry", value: "io.github.greencore-solutions/cpg-knowledge-graph" },
   { header: "x-gsc-mcp-server", value: "mcp.cpgknowledgegraph.ai" },
   { header: "x-gsc-agent-access", value: "MCP+A2A" },
   { header: "x-gsc-timestamp", value: "<per request — ISO 8601>" },

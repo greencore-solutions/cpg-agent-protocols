@@ -33,7 +33,7 @@ function ghostEighteen(res, signal = "ACM-200", state = "ALLOW") {
     "x-gsc-duns": "24-336-6774",
     "x-gsc-inbound": "https://x-gsi.ai/ingest",
     "x-gsc-trust-anchor": "dpuone.ai",
-    "x-gsc-registry": "io.github.gsc-em/mcp-cpg-gtin",
+    "x-gsc-registry": "io.github.greencore-solutions/cpg-knowledge-graph",
     "x-gsc-mcp-server": "mcp.cpgknowledgegraph.ai",
     "x-gsc-agent-access": "MCP+A2A",
     "x-gsc-timestamp": new Date().toISOString(),
@@ -223,7 +223,7 @@ app.get("/.well-known/agent-card.json", bc(() => ({
   version: VERSION,
   operator: "GreenCore Solutions Corp.",
   operator_url: "https://gsc-em.com",
-  protocol: { name: "ACM-68000", registry: "io.github.gsc-em/mcp-cpg-gtin" },
+  protocol: { name: "ACM-68000", registry: "io.github.greencore-solutions/cpg-knowledge-graph" },
   mcp: {
     endpoint: `https://${NODE}/mcp`,
     transport: "streamable-http",
