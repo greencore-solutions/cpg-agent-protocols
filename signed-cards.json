@@ -1,0 +1,14 @@
+{
+ "mcp.cpgagentprotocols.ai": [
+  {
+   "protected": "eyJhbGciOiJFUzI1NiIsImtpZCI6ImdzYy1jYXJkcy0yMDI2LTA4In0",
+   "signature": "sRFHj0WZqt0hmnd6qKLjg9f4-4qEaI39s0GnSVTCtMaBEK8oUntvDeXC97Q-KyAaQYeejMi4VuDZStqdaaHyHA"
+  }
+ ],
+ "cpgagentprotocols.ai": [
+  {
+   "protected": "eyJhbGciOiJFUzI1NiIsImtpZCI6ImdzYy1jYXJkcy0yMDI2LTA4In0",
+   "signature": "G6S-WIXavSkAv7fkjxMNyIDItYlgxMenm3_IZRyzcDX6DAcqsX-FJ3IKsala4XXBcIWrqk_Jhb3DWQKBgbWbEA"
+  }
+ ]
+}

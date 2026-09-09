@@ -1,6 +1,6 @@
 {
   "name": "cpg-agent-protocols-beacon",
-  "version": "1.0.0",
+  "version": "1.1.2",
   "description": "GSC protocol beacon — mcp.cpgagentprotocols.ai. ACM-SPARKS / SM-ECO-10060 / ACM-68000 standards surface. GreenCore Solutions Corp.",
   "type": "module",
   "main": "server.js",

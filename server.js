@@ -15,36 +15,69 @@ import crypto from "node:crypto";
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { StreamableHTTPServerTransport } from "@modelcontextprotocol/sdk/server/streamableHttp.js";
 import { z } from "zod";
+import { mountAeo, mountMcpMethodGuard } from "./aeo.js";
 import {
   PROTOCOLS, SPINE, SIGNALS, SPARKS_DIMENSIONS, SPARKS_SENTENCE,
   GHOST_EIGHTEEN, GHOST_VERSION, MEMBERS,
 } from "./canon.js";
 
-const VERSION = "1.0.0";
+const VERSION = "1.1.2";
 const NODE = "mcp.cpgagentprotocols.ai";
 
 // ---------- Ghost Headers Canon v3.2 — live emission ----------
-function ghostEighteen(res, signal = "ACM-200", state = "ALLOW") {
-  res.set({
-    "x-gsc-protocol": "ACM-68000",
-    "x-gsc-classification": "ACM-SPARKS",
+const GHOST_V4 = {
+ "mcp.cpgagentprotocols.ai": {
+  "region": "France Central",
+  "jurisdiction": "apex",
+  "mcp": "https://mcp.cpgagentprotocols.ai/mcp",
+  "product": "https://acm-68000.org/",
+  "git": "io.github.greencore-solutions/cpg-agent-protocols",
+  "x402": false
+ },
+ "cpgagentprotocols.ai": {
+  "region": "France Central",
+  "jurisdiction": "apex",
+  "mcp": "https://mcp.cpgagentprotocols.ai/mcp",
+  "product": "https://cpgagentprotocols.ai/",
+  "git": "io.github.greencore-solutions/cpg-agent-protocols",
+  "x402": false
+ }
+};
+const GHOST_V4_PRIMARY = "mcp.cpgagentprotocols.ai";
+function ghostV4Set(res, signal, state) {
+  const hn = ((res.req && (res.req.hostname || res.req.headers.host)) || GHOST_V4_PRIMARY).toLowerCase().split(":")[0];
+  const v = GHOST_V4[hn] || GHOST_V4[GHOST_V4_PRIMARY];
+  const self = GHOST_V4[hn] ? hn : GHOST_V4_PRIMARY;
+  const sig = String(signal || "CPG-200").replace(/^ACM-/, "CPG-");
+  const h = {
+    "x-gsc-protocol": "CPG-68000",
+    "x-gsc-version": "4.0",
+    "x-gsc-handshake": "https://gsc-registry.ai/resolve/" + self,
+    "x-gsc-card": "https://" + self + "/.well-known/agent-card.json",
+    "x-gsc-trust-anchor": "https://dpuone.ai/.well-known/jwks.json",
     "x-gsc-operator": "GreenCore Solutions Corp.",
-    "x-gsc-microsoft-partner": "AI-Cloud-Partner-Program-Member",
     "x-gsc-duns": "24-336-6774",
+    "x-gsc-microsoft-partner": "AI-Cloud-Partner-Program-Member",
+    "x-gsc-node": self,
+    "x-gsc-region": v.region,
+    "x-gsc-jurisdiction": v.jurisdiction,
+    "x-gsc-signal": sig,
+    "x-gsc-state": state || "ALLOW",
+    "x-gsc-graph": "https://mcp.cpgknowledgegraph.ai/mcp",
+    "x-gsc-mcp": v.mcp,
     "x-gsc-inbound": "https://x-gsi.ai/ingest",
-    "x-gsc-trust-anchor": "dpuone.ai",
-    "x-gsc-registry": "io.github.greencore-solutions/cpg-knowledge-graph",
-    "x-gsc-mcp-server": "mcp.cpgknowledgegraph.ai",
-    "x-gsc-agent-access": "MCP+A2A",
-    "x-gsc-timestamp": new Date().toISOString(),
-    "x-gsc-nonce": crypto.randomUUID(),
-    "x-gsc-signal": signal,
-    "x-gsc-state": state,
-    "x-gsc-node": NODE,
-    "x-gsc-jurisdiction": "FR",
-    "x-gsc-product": "AI-Agents-for-CPG+CPG-Knowledge-Graph",
-    "x-gsc-fleet": "https://gsc-cpg.ai,https://gsc-a2a.ai,https://gsc-a2a.io",
-  });
+    "x-gsc-product": v.product,
+    "x-gsc-fleet": "https://gsc-cpg.ai,https://gsc-a2a.ai,https://gsc-a2a.io,https://gsc-fleet.ai",
+  };
+  if (v.git) h["x-gsc-git"] = v.git;
+  if (v.x402) h["x-gsc-x402"] = "ready";
+  h["x-gsc-timestamp"] = new Date().toISOString();
+  h["x-gsc-nonce"] = crypto.randomUUID();
+  res.set(h);
+}
+
+function ghostEighteen(res, signal = "ACM-200", state = "ALLOW") {
+  ghostV4Set(res, signal, state);
 }
 
 const t = (obj) => ({ content: [{ type: "text", text: JSON.stringify(obj, null, 2) }] });
@@ -74,11 +107,12 @@ function buildMcp() {
 
   mcp.registerTool("resolve_signal", {
     title: "Resolve one signal code",
-    description: "The state and meaning of a single ACM-68000 signal code.",
-    inputSchema: { code: z.string().describe("Signal code, e.g. ACM-451") },
+    description: "The state and meaning of a single ACM-68000 signal code. A CPG- profile code resolves to its ACM- twin; the response carries the resolved ACM- code.",
+    inputSchema: { code: z.string().describe("Signal code, e.g. ACM-451 or CPG-451") },
   }, async ({ code }) => {
-    const key = code.toUpperCase().trim();
-    return SIGNALS[key] ? t({ code: key, ...SIGNALS[key] }) : notFound("Signal", code);
+    const input = code.toUpperCase().trim();
+    const key = input.replace(/^CPG-/, "ACM-");   // the CPG- profile names the same definition as its ACM- twin; wire form is ACM-
+    return SIGNALS[key] ? t({ code: key, input_code: input, ...SIGNALS[key] }) : notFound("Signal", code);
   });
 
   mcp.registerTool("list_sparks_dimensions", {
@@ -127,6 +161,16 @@ function buildMcp() {
 const app = express();
 app.use(express.json({ limit: "256kb" }));
 
+// AEO / discovery layer (v2, NG-7 FIX Track 1, 2026-08-24) — additive GET routes only;
+// registered first so its A2A 1.0 agent card wins over the legacy card routes below.
+mountAeo(app, {
+  title: "CPG Agent Protocols", version: VERSION, protocol: "ACM-68000",
+  tools: ["list_protocols","get_protocol","list_signals","resolve_signal","list_sparks_dimensions","resolve_sparks_dimension","list_members","resolve_member","get_header_canon"],
+  ghost: ghostEighteen, hosts: [NODE, "cpgagentprotocols.ai"],
+  registryName: "io.github.greencore-solutions/cpg-agent-protocols",
+  desc: "GSC protocol beacon — the standards surface for ACM-SPARKS, SM-ECO-10060, and ACM-68000. Stateless, deterministic, compiled canon: 7 signals, 6 SPARKS dimensions, 49 sovereign members, the Ghost header canon. Data lives on mcp.cpgknowledgegraph.ai; this surface defines the vocabulary.",
+});
+
 app.post("/mcp", async (req, res) => {
   ghostEighteen(res);
   try {
@@ -143,17 +187,23 @@ app.post("/mcp", async (req, res) => {
     }
   }
 });
-app.get("/mcp", (req, res) => { ghostEighteen(res); res.status(405).json({ error: "Method not allowed. POST JSON-RPC to /mcp." }); });
+// One /mcp method convention (NG-7 FIX item 2): every non-POST method answers a
+// deliberate JSON 405 with Allow: POST — never a default HTML 404.
+mountMcpMethodGuard(app, ghostEighteen);
 
 // ---------- broadcast surfaces (plain GET JSON) ----------
 const bc = (handler) => (req, res) => { ghostEighteen(res); res.json(handler()); };
 
-app.get("/health", bc(() => ({
+// PROPOSED 2026-08-09 (endpoint-receipts probe): shared payload + /health.json alias,
+// per the Aug 9 CEO standing ruling on uniform machine-readable receipts.
+const healthPayload = () => ({
   protocol: "ACM-68000", version: VERSION, status: "active", node: NODE,
   role: "protocol-beacon", stateless: true,
   operator: "GreenCore Solutions Corp.", operator_url: "https://gsc-em.com",
   tools: ["list_protocols","get_protocol","list_signals","resolve_signal","list_sparks_dimensions","resolve_sparks_dimension","list_members","resolve_member","get_header_canon"],
-})));
+});
+app.get("/health", bc(healthPayload));
+app.get("/health.json", bc(healthPayload));
 
 app.get("/protocol.json", bc(() => ({ spine: SPINE, protocols: PROTOCOLS })));
 app.get("/signals.json", bc(() => ({ protocol: "ACM-68000", signal_count: 7, signals: SIGNALS })));
@@ -174,7 +224,7 @@ app.get("/", bc(() => ({
     gsc_em: "https://gsc-em.com",
     x_gsc: "https://x.com/GSC_Rail_ai",
     gsc_agentic_au: "https://gsc-agentic.ai",
-    x_gsc_agentic: "https://x.com/gsc_agentic_ai",
+    x_gsc_agentic: "https://x.com/gsc_global_ai",
   },
   microsoft_partner: "Microsoft AI Cloud Partner",
   endpoint: `https://${NODE}`,
@@ -231,48 +281,61 @@ app.get("/.well-known/agent-card.json", bc(() => ({
   },
 })));
 
-app.get("/.well-known/agent.json", bc(() => ({
-  protocolVersion: "0.3.0",
-  name: "CPG Agent Protocols",
-  description:
-    "GSC protocol beacon by GreenCore Solutions Corp. — the standards surface for ACM-SPARKS (classifies), SM-ECO-10060 (resolves), and ACM-68000 (signals). Deterministic answers about the protocols themselves; live data is the CPG Knowledge Graph's job.",
-  url: `https://${NODE}`,
-  version: VERSION,
-  provider: { organization: "GreenCore Solutions Corp.", url: "https://gsc-em.com" },
-  capabilities: { streaming: false, pushNotifications: false },
-  defaultInputModes: ["application/json"],
-  defaultOutputModes: ["application/json"],
-  skills: [
-    { id: "list_protocols", name: "List protocols", description: "The three GSC protocols and the resolve-once spine." },
-    { id: "resolve_signal", name: "Resolve a signal", description: "State and meaning of any ACM-68000 signal code." },
-    { id: "list_sparks_dimensions", name: "SPARKS dimensions", description: "The six dimensions ACM-SPARKS resolves." },
-    { id: "resolve_member", name: "Resolve a member", description: "Any SM-ECO-10060 sovereign member with its GS1 territory GTIN." },
-    { id: "get_header_canon", name: "Header canon", description: "The Ghost Eighteen x-gsc-* wire headers, canon order." },
+// Legacy /.well-known/agent.json (was a draft 0.3.0-shape card) — the current card is
+// A2A 1.0 at /.well-known/agent-card.json (NG-7 FIX item 4); one card, one address.
+app.get("/.well-known/agent.json", (req, res) => { ghostEighteen(res); res.redirect(308, "/.well-known/agent-card.json"); });
+
+// ARD envelope (ESTATE SWEEP Phase 3, 2026-08-21) — true ARD capability manifest per
+// ard-spec @5fa2f5a (specVersion + host + entries), replacing the legacy beacon shape.
+// The beacon's real capabilities are its MCP tools; entries stay in this surface's voice.
+app.get("/.well-known/ai-catalog.json", bc(() => ({
+  specVersion: "1.0",
+  host: { displayName: "CPG Agent Protocols", identifier: `did:web:${NODE}` },
+  entries: [
+    {
+      identifier: `urn:air:${NODE}:beacon:protocol-registry`,
+      displayName: "CPG Agent Protocols — the GSC standards beacon (MCP)",
+      type: "application/mcp-server+json",
+      url: `https://${NODE}/mcp`,
+      capabilities: ["list_protocols","get_protocol","list_signals","resolve_signal","list_sparks_dimensions","resolve_sparks_dimension","list_members","resolve_member","get_header_canon"],
+      description: "The GSC protocol beacon, served live over MCP (streamable-http): ACM-68000 signals, SPARKS dimensions, SM-ECO-10060 members and the Ghost header canon, resolved as fact. Operated by GreenCore Solutions Corp.",
+      representativeQueries: [
+        "list the GSC agent protocols and their canonical surfaces",
+        "resolve ACM-451 to its state and required action",
+        "which SM-ECO-10060 member governs France",
+      ],
+    },
+    {
+      identifier: `urn:air:${NODE}:broadcast:protocol-record`,
+      displayName: "Protocol broadcast record",
+      type: "application/json",
+      url: `https://${NODE}/protocol.json`,
+      capabilities: ["protocol-record", "signal-record", "header-canon"],
+      description: "The beacon's static broadcast set: protocol.json, signals.json, sparks.json, nodes.json and headers.json — the same canon the MCP tools resolve, as plain JSON documents.",
+      representativeQueries: [
+        "what are the seven ACM-68000 signals",
+        "what is the Ghost header canon",
+      ],
+    },
   ],
-  endpoints: { mcp: `https://${NODE}/mcp` },
 })));
 
-app.get("/.well-known/ai-catalog.json", bc(() => ({
-  service: "CPGAgentProtocols.ai",
-  operator: "GreenCore Solutions Corp.",
-  operator_url: "https://gsc-em.com",
-  version: VERSION,
-  protocol: "ACM-68000",
-  role: "protocol-beacon",
-  catalog: [
-    { type: "mcp", transport: "streamable-http", url: `https://${NODE}/mcp`, tools: ["list_protocols","get_protocol","list_signals","resolve_signal","list_sparks_dimensions","resolve_sparks_dimension","list_members","resolve_member","get_header_canon"] },
-    { type: "broadcast", urls: [`https://${NODE}/protocol.json`, `https://${NODE}/signals.json`, `https://${NODE}/sparks.json`, `https://${NODE}/nodes.json`, `https://${NODE}/headers.json`] },
-    { type: "agent-card", url: `https://${NODE}/.well-known/agent-card.json` },
-    { type: "a2a-agent-card", url: `https://${NODE}/.well-known/agent.json` },
-    { type: "health", url: `https://${NODE}/health` },
-  ],
-  related: {
-    knowledge_graph: "https://mcp.cpgknowledgegraph.ai",
-    transaction: "https://mcp.cpghumanintheloop.ai",
-    fleet: ["https://gsc-cpg.ai", "https://gsc-a2a.ai", "https://gsc-a2a.io"],
-    governance: "https://standard-10060.org",
-  },
-})));
+// Real 404s (NG-7 FIX item 1): branded JSON with correct content-type on every unknown
+// path — never the Express default HTML page. Signal vocabulary is this beacon's own.
+app.use((req, res) => {
+  ghostEighteen(res, "ACM-404", "NOT_FOUND");
+  res.status(404).json({
+    signal: "ACM-404", state: "NOT_FOUND",
+    meaning: `No surface at '${req.path}' on this beacon.`,
+    surfaces: {
+      root: `https://${NODE}/`, mcp: `https://${NODE}/mcp`, health: `https://${NODE}/health.json`,
+      llms: `https://${NODE}/llms.txt`, mcp_json: `https://${NODE}/.well-known/mcp.json`,
+      server_card: `https://${NODE}/.well-known/mcp/server-card.json`,
+      agent_card: `https://${NODE}/.well-known/agent-card.json`,
+      api_catalog: `https://${NODE}/.well-known/api-catalog`,
+    },
+  });
+});
 
 const PORT = process.env.PORT || 8080;
 app.listen(PORT, () => console.log(`CPG Agent Protocols beacon v${VERSION} listening on :${PORT}`));
