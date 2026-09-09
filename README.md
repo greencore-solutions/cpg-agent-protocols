@@ -17,7 +17,7 @@ As returned by `tools/list` on the live beacon on 2026-09-09.
 | `list_protocols` | The protocol family and the spine: ACM-SPARKS classifies, SM-ECO-10060 resolves, ACM-68000 signals. |
 | `get_protocol` | Full canon record for ACM-SPARKS, SM-ECO-10060, or ACM-68000. |
 | `list_signals` | The signal register, enumerated individually. One meaning, no drift. |
-| `resolve_signal` | The state and meaning of a single ACM-68000 signal code. |
+| `resolve_signal` | The state and meaning of a single ACM-68000 signal code. A CPG- profile code resolves to its ACM- twin; the response carries the resolved ACM- code. |
 | `list_sparks_dimensions` | SPARKS resolves six dimensions — SKU, Pack, Amount, Region, Kernel, and Standard — a CPG industry first. |
 | `resolve_sparks_dimension` | Canon record for a single SPARKS dimension by letter or name. |
 | `list_members` | The sovereign jurisdictional member nodes: code, namespace, jurisdiction, region, and GS1 territory GTIN. |
@@ -38,7 +38,7 @@ The register. Each ACM- signal has a CPG- profile twin naming the same definitio
 | acm-451 | ESCALATE | cpg-451 | Cannot be resolved deterministically. Human review required. Served by mcp.cpghumanintheloop.ai. |
 | acm-500 | SYSTEM_ERROR | cpg-500 | Server or upstream error. Retry per backoff policy. |
 
-Any of the CPG- codes in the table resolves to its ACM- definition on the same row; the wire form is ACM-. The beacon's `resolve_signal` takes the ACM- form.
+Any of the CPG- codes in the table resolves to its ACM- definition on the same row; the wire form is ACM-. The beacon's `resolve_signal` accepts either form and answers with the ACM- record, the resolved ACM- code on the response (`code`) beside the code as given (`input_code`); anything outside the seven is NOT_FOUND.
 
 Links: https://acm-68000.ai · https://cpg-68000.ai · https://standard-10060.org
 
